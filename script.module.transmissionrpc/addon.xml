@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <addon id="script.module.transmissionrpc"
        name="transmissionrpc"
-       version="0.0.1"
+       version="0.0.2"
        provider-name="lsellens">
   <requires>
     <import addon="xbmc.addon" version="12.0.0"/>
@@ -15,7 +15,7 @@
     <description>This is a module for python transmission-rpc</description>
     <platform>linux</platform>
     <license>MIT License</license>
-    <news>0.0.1 - inital release</news>
+    <news>0.0.2 - update files to version 2.0.4</news>
     <assets>
       <icon>icon.png</icon>
     </assets>
