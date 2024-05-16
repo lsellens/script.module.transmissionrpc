@@ -1,21 +1,17 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<addon id="script.module.transmissionrpc"
-       name="transmissionrpc"
-       version="0.0.2"
-       provider-name="lsellens">
+<addon id="script.module.transmissionrpc" name="transmissionrpc" version="0.0.3" provider-name="lsellens">
   <requires>
     <import addon="xbmc.addon" version="12.0.0"/>
-    <import addon="xbmc.python" version="2.1.0"/>
+    <import addon="xbmc.python" version="3.0.0"/>
     <import addon="script.module.six" version="1.1.0"/>
   </requires>
-  <extension point="xbmc.python.module"
-             library="lib"/>
+  <extension point="xbmc.python.module" library="lib"/>
   <extension point="xbmc.addon.metadata">
     <summary>python transmission-rpc module</summary>
     <description>This is a module for python transmission-rpc</description>
     <platform>linux</platform>
     <license>MIT License</license>
-    <news>0.0.2 - update files to version 2.0.4</news>
+    <news>0.0.3 - update files to version 7.0.5, python3 compatibility</news>
     <assets>
       <icon>resources/icon.png</icon>
     </assets>

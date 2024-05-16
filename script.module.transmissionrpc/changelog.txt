@@ -1,3 +1,7 @@
+0.0.3
+- transmission-rpc 7.0.5
+- python 3 compatibility
+
 0.0.2
 - transmission-rpc 2.0.4
 

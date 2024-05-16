@@ -1,190 +1,81 @@
+# Copyright (c) 2018-2021 Trim21 <i@trim21.me>
 # Copyright (c) 2008-2014 Erik Svensson <erik.public@gmail.com>
 # Licensed under the MIT license.
-
-import socket
+import base64
+import pathlib
 import datetime
-from collections import namedtuple
+from typing import List, Tuple, Union, BinaryIO, Optional
+from urllib.parse import urlparse
 
-import transmission_rpc.constants as constants
-from transmission_rpc.constants import LOGGER
+from transmission_rpc import constants
 
-UNITS = ['B', 'KiB', 'MiB', 'GiB', 'TiB', 'PiB', 'EiB']
+UNITS = ["B", "KiB", "MiB", "GiB", "TiB", "PiB", "EiB"]
 
 
-def format_size(size):
+def format_size(size: int) -> Tuple[float, str]:
     """
     Format byte size into IEC prefixes, B, KiB, MiB ...
     """
-    size = float(size)
+    s = float(size)
     i = 0
-    while size >= 1024.0 and i < len(UNITS):
+    while s >= 1024.0 and i < len(UNITS):
         i += 1
-        size /= 1024.0
-    return size, UNITS[i]
+        s /= 1024.0
+    return s, UNITS[i]
 
 
-def format_speed(size):
+def format_speed(size: int) -> Tuple[float, str]:
     """
     Format bytes per second speed into IEC prefixes, B/s, KiB/s, MiB/s ...
     """
-    (size, unit) = format_size(size)
-    return size, unit + '/s'
+    (s, unit) = format_size(size)
+    return s, f"{unit}/s"
 
 
-def format_timedelta(delta):
+def format_timedelta(delta: datetime.timedelta) -> str:
     """
     Format datetime.timedelta into <days> <hours>:<minutes>:<seconds>.
     """
     minutes, seconds = divmod(delta.seconds, 60)
     hours, minutes = divmod(minutes, 60)
-    return '%d %02d:%02d:%02d' % (delta.days, hours, minutes, seconds)
+    return f"{delta.days:d} {hours:02d}:{minutes:02d}:{seconds:02d}"
 
 
-def format_timestamp(timestamp, utc=False):
+def get_torrent_arguments(rpc_version: int) -> List[str]:
     """
-    Format unix timestamp into ISO date format.
+    Get torrent arguments for method in specified Transmission RPC version.
     """
-    if timestamp > 0:
-        if utc:
-            dt_timestamp = datetime.datetime.utcfromtimestamp(timestamp)
-        else:
-            dt_timestamp = datetime.datetime.fromtimestamp(timestamp)
-        return dt_timestamp.isoformat(' ')
-    else:
-        return '-'
-
-
-class INetAddressError(Exception):
-    """
-    Error parsing / generating a internet address.
-    """
-
-
-def inet_address(address, default_port, default_address='localhost'):
-    """
-    Parse internet address.
-    """
-    addr = address.split(':')
-    if len(addr) == 1:
-        try:
-            port = int(addr[0])
-            addr = default_address
-        except ValueError:
-            addr = addr[0]
-            port = default_port
-    elif len(addr) == 2:
-        try:
-            port = int(addr[1])
-        except ValueError:
-            raise INetAddressError('Invalid address "%s".' % address)
-        if len(addr[0]) == 0:
-            addr = default_address
-        else:
-            addr = addr[0]
-    else:
-        raise INetAddressError('Invalid address "%s".' % address)
-    try:
-        socket.getaddrinfo(addr, port, socket.AF_INET, socket.SOCK_STREAM)
-    except socket.gaierror:
-        raise INetAddressError('Cannot look up address "%s".' % address)
-    return addr, port
-
-
-def rpc_bool(arg):
-    """
-    Convert between Python boolean and Transmission RPC boolean.
-    """
-    if isinstance(arg, str):
-        try:
-            arg = bool(int(arg))
-        except ValueError:
-            arg = arg.lower() in ['true', 'yes']
-    return 1 if bool(arg) else 0
-
-
-TR_TYPE_MAP = {
-    'number': int, 'string': str, 'double': float, 'boolean': rpc_bool,
-    'array': list, 'object': dict
-}
-
-
-def make_python_name(name):
-    """
-    Convert Transmission RPC name to python compatible name.
-    """
-    return name.replace('-', '_')
-
-
-def make_rpc_name(name):
-    """
-    Convert python compatible name to Transmission RPC name.
-    """
-    return name.replace('_', '-')
-
-
-def argument_value_convert(method, argument, value, rpc_version):
-    """
-    Check and fix Transmission RPC issues with regards to methods, arguments and values.
-    """
-    if method in ('torrent-add', 'torrent-get', 'torrent-set'):
-        args = constants.TORRENT_ARGS[method[-3:]]
-    elif method in ('session-get', 'session-set'):
-        args = constants.SESSION_ARGS[method[-3:]]
-    else:
-        return ValueError('Method "%s" not supported' % (method))
-    if argument in args:
-        info = args[argument]
-        invalid_version = True
-        while invalid_version:
-            invalid_version = False
-            replacement = None
-            if rpc_version < info[1]:
-                invalid_version = True
-                replacement = info[3]
-            if info[2] and info[2] <= rpc_version:
-                invalid_version = True
-                replacement = info[4]
-            if invalid_version:
-                if replacement:
-                    LOGGER.warning(
-                        'Replacing requested argument "%s" with "%s".' %
-                        (argument, replacement)
-                    )
-                    argument = replacement
-                    info = args[argument]
-                else:
-                    raise ValueError(
-                        'Method "%s" Argument "%s" does not exist in version %d.'
-                        % (method, argument, rpc_version)
-                    )
-        return (argument, TR_TYPE_MAP[info[0]](value))
-    else:
-        raise ValueError(
-            'Argument "%s" does not exists for method "%s".',
-            (argument, method)
-        )
-
-
-def get_arguments(method, rpc_version):
-    """
-    Get arguments for method in specified Transmission RPC version.
-    """
-    if method in ('torrent-add', 'torrent-get', 'torrent-set'):
-        args = constants.TORRENT_ARGS[method[-3:]]
-    elif method in ('session-get', 'session-set'):
-        args = constants.SESSION_ARGS[method[-3:]]
-    else:
-        return ValueError('Method "%s" not supported' % (method))
     accessible = []
-    for argument, info in args.items():
+    for argument, info in constants.TORRENT_GET_ARGS.items():
         valid_version = True
-        if rpc_version < info[1]:
+        if rpc_version < info.added_version:
             valid_version = False
-        if info[2] and info[2] <= rpc_version:
+        if info.removed_version is not None and info.removed_version <= rpc_version:
             valid_version = False
         if valid_version:
             accessible.append(argument)
     return accessible
 
 
-Field = namedtuple('Field', ['value', 'dirty'])
+def _try_read_torrent(torrent: Union[BinaryIO, str, bytes, pathlib.Path]) -> Optional[str]:  # pylint: disable=R0911
+    """
+    if torrent should be encoded with base64, return a non-None value.
+    """
+    # torrent is a str, may be a url
+    if isinstance(torrent, str):
+        parsed_uri = urlparse(torrent)
+        # torrent starts with file, read from local disk and encode it to base64 url.
+        if parsed_uri.scheme in ["https", "http", "magnet"]:
+            return None
+
+        if parsed_uri.scheme in ["file"]:
+            raise ValueError("support for `file://` URL has been removed.")
+    elif isinstance(torrent, pathlib.Path):
+        return base64.b64encode(torrent.read_bytes()).decode("utf-8")
+    elif isinstance(torrent, bytes):
+        return base64.b64encode(torrent).decode("utf-8")
+    # maybe a file, try read content and encode it.
+    elif hasattr(torrent, "read"):
+        return base64.b64encode(torrent.read()).decode("utf-8")
+
+    return None
